@@ -1,6 +1,6 @@
 local server_new = require "server"
 local socket = require "socket.c"
-local sleep = socket.sleep
+-- local sleep = socket.sleep
 
 local server, err = server_new(7510)
 assert(server, tostring(err))
@@ -32,7 +32,8 @@ end
 local function recv(self, s)
     local recv_buf = self.v_recv_buf
     print("recv:", s, #s)
-    self:send_msg(eval(s))
+    self:send_msg(s)
+    -- self:send_msg(eval(s))
     return true
 end
 
