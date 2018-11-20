@@ -27,7 +27,7 @@ local function sendall(fd, data)
 end
 
 
-while true do 
+while true do
     local csock, err = sock:accept()
     csock:setblocking(false)
 
@@ -37,7 +37,7 @@ while true do
     local recv_buf = buff_queue.create()
 
     local count = 0
-    while true do 
+    while true do
         count =  count + 1
 
         local data, errno = csock:recv()
@@ -51,7 +51,7 @@ while true do
         local s = "hello_"..(count)
         sendall(csock, s)
 
-        sleep(1)
+        sleep(1000)
     end
 end
 

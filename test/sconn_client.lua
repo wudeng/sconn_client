@@ -1,17 +1,12 @@
 local sconn = require "sconn"
 local socket = require "socket.c"
---local sleep = socket.sleep
+local sleep = socket.sleep
 
--- local sock, err = sconn.connect_host("127.0.0.1", 9527)
-local sock, err = sconn.connect_host("127.0.0.1", 1248)
+local sock, err = sconn.connect_host("127.0.0.1", 20288)
 assert(sock, err)
 
 local count = 1
 local out = {}
-
-local function pause()
-    io.stdin:read '*l'
-end
 
 while true do
     local s = "kiss_"..(count)
@@ -34,6 +29,5 @@ while true do
     print("recv:", type(data), "len:", #data, data)
 
     count = count + 1
-    pause()
-    -- os.execute("sleep 1")
+    sleep(1000)
 end

@@ -38,7 +38,7 @@ typedef long     ssize_t;
 #define EINTR WSAEINTR
 #define EAGAIN WSAEWOULDBLOCK
 #define EINPROGRESS WSAEINPROGRESS
-#define ECONNREFUSED WSAECONNREFUSED    
+#define ECONNREFUSED WSAECONNREFUSED
 #define EISCONN  WSAEISCONN
 
 #ifndef _WIN32
@@ -107,10 +107,10 @@ typedef struct _sock_t {
 #endif
 } socket_t;
 
-/* 
- *   internal function 
+/*
+ *   internal function
  */
-INLINE static socket_t* 
+INLINE static socket_t*
 _getsock(lua_State *L, int index) {
     socket_t* sock = (socket_t*)luaL_checkudata(L, index, SOCKET_METATABLE);
     return sock;
@@ -199,6 +199,15 @@ _push_result(lua_State *L, int err) {
     return 1;
 }
 
+static int
+_sleep(lua_State* L) {
+    lua_Integer ms = lua_tointeger(L, 1);
+    struct timeval delay;
+    delay.tv_sec = ms / 1000;
+    delay.tv_usec = (ms % 1000) * 1000;
+    select(0, NULL,NULL, NULL, &delay);
+    return 0;
+}
 
 /*
  *    end
@@ -291,7 +300,7 @@ _lstrerror(lua_State *L) {
         wchar_t *s = NULL;
         char error_s[128] = {0};
         FormatMessageW(
-            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
             NULL, err,
             MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
             (LPWSTR)(&s), 0, NULL);
@@ -496,10 +505,10 @@ _sock_sendto(lua_State *L) {
     host = luaL_checkstring(L, 2);
     luaL_checkinteger(L, 3);
     port = lua_tostring(L, 3);
-    
+
     buf = luaL_checklstring(L, 4, &len);
     from = luaL_optinteger(L, 5, 0);
-    
+
 #ifdef MSG_NOSIGNAL
     flags = MSG_NOSIGNAL;
 #endif
@@ -508,7 +517,7 @@ _sock_sendto(lua_State *L) {
         return luaL_argerror(L, 5, "should be less than length of argument #4");
     }
 
-   
+
     err = _getsockaddrarg(sock, host, port, &res);
     if(err != 0) {
         lua_pushnil(L);
@@ -756,6 +765,7 @@ static const struct luaL_Reg socket_module_methods[] = {
     {"resolve", _resolve},
     {"strerror", _lstrerror},
     {"gai_strerror", _lgai_strerror},
+    {"sleep", _sleep},
     {"normalize_ip", _normalize_ip},
     {NULL, NULL}
 };
@@ -823,7 +833,7 @@ LUALIB_API int luaopen_socket_c(lua_State *L) {
 #endif
 #ifdef SO_NOSIGPIPE
     ADD_CONSTANT(L, SO_NOSIGPIPE);
-#endif 
+#endif
 #ifdef SO_NREAD
     ADD_CONSTANT(L, SO_NREAD);
 #endif
