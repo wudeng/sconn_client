@@ -1,4 +1,4 @@
-local conn = require "conn"
+local conn = require "conn"   
 local crypt = require "crypt"
 local rc4 = require "rc4.c"
 local buffer_queue = require "buffer_queue"
@@ -16,7 +16,7 @@ local cache_mt = {}
 
 -------------- for test ---------------
 local VERBOSE = true
-local log = VERBOSE and print or 
+local log = VERBOSE and print or
     function(...)
     end
 
@@ -124,13 +124,13 @@ local state = {
 
     reconnect_match_error = {
         name = "reconnect_match_error",
-        send = dummy, 
+        send = dummy,
         dispose = dispose_error,
     },
 
     reconnect_cache_error = {
         name = "reconnect_cache_error",
-        send = dummy, 
+        send = dummy,
         dispose = dispose_error,
     },
 
@@ -165,7 +165,7 @@ function state.newconnect.request(self)
     data = pack_data(data, 2, "big")
     self.v_sock:send(data)
     self.v_clientkey = clientkey
-    log("request:", data)
+    log("request========================:", #data)
     self.v_send_buf_top = 0
 end
 
@@ -225,7 +225,7 @@ function state.reconnect.request(self)
     --index\n
     --recvnumber\n
     --base64(HMAC_CODE)\n
-    
+
     self.v_reconnect_index = self.v_reconnect_index + 1
 
     local content = string.format("%d\n%d\n%d\n",
@@ -258,7 +258,7 @@ function state.reconnect.dispatch(self)
     local data = self.v_sock:pop_msg(2, "big")
 
     if not data then return end
-    
+
     log("dispatch:", data)
     local recv,msg = data:match "([^\n]*)\n([^\n]*)"
     recv = tonumber(recv)
@@ -362,7 +362,7 @@ function state.close.dispose(state_self, success, err, status)
 end
 
 
-local function connect(host, port)
+local function connect(network, host, port)
     local raw = {
         v_state = false,
         v_sock = false,
@@ -386,7 +386,7 @@ local function connect(host, port)
         v_recv_buf = buffer_queue.create(),
     }
 
-    local sock, err = conn.connect_host(host, port)
+    local sock, err = conn.connect_host(network, host, port)
     if not sock then
         return nil, err
     end
@@ -409,8 +409,9 @@ function mt:reconnect(cb)
 
     local addr = self.v_sock.o_host_addr
     local port = self.v_sock.o_port
+    local network = self.v_sock.o_network
 
-    local success, err = self.v_sock:new_connect(addr, port)
+    local success, err = self.v_sock:new_connect(network, addr, port)
     if not success then
         return false, err
     end
@@ -425,7 +426,7 @@ function mt:flush_send()
 end
 
 
---[[ 
+--[[
 update 接口现在会返回三个参数 success, err, status
 
 success: boolean类型 表示当前status是否正常
@@ -442,10 +443,10 @@ status: string类型 当前sconn所在的状态，状态只能是:
     "close": 关闭状态
 ]]
 
-function mt:update()
+function mt:update(msnow)
     local sock = self.v_sock
     local state = self.v_state
-    local success, err, status = sock:update()
+    local success, err, status = sock:update(msnow)
     local dispatch = state.dispatch
     if success and dispatch then
         dispatch(self)

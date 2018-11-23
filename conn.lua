@@ -1,11 +1,11 @@
 local socket = require "socket.c"
-local buffer_queue = require "buffer_queue"
+local tcp = require "tcp"
+local kcp = require "kcp"
 
 local OK = 0
 local EINTR = socket.EINTR
 local EAGAIN = socket.EAGAIN
 local EINPROGRESS = socket.EINPROGRESS
-local ECONNREFUSED = socket.ECONNREFUSED
 local EISCONN = socket.EISCONN
 
 local DEF_MSG_HEADER_LEN = 2
@@ -26,23 +26,23 @@ local function resolve(host)
 end
 
 
-local function connect(addr, port)
-    local fd = socket.socket(addr.family, socket.SOCK_STREAM, 0);
-    fd:setblocking(false)
-
-    local errcode = fd:connect(addr.addr, port)
+local function connect(network, addr, port)
+    local fd, errcode
+    if network == "tcp" then
+        fd, errcode = tcp.new(addr, port)
+    else
+        fd, errcode = kcp.new(addr, port)
+    end
     if errcode == OK or
        errcode == EAGAIN or
        errcode == EINPROGRESS or
-       errcode == EINTR or 
+       errcode == EINTR or
        errcode == EISCONN  then
        local raw = {
-            v_send_buf = buffer_queue.create(),
-            v_recv_buf = buffer_queue.create(),
             v_fd = fd,
-
             o_host_addr = addr,
             o_port = port,
+            o_network = network,
             v_check_connect = true,
        }
        return setmetatable(raw, {__index = mt})
@@ -52,73 +52,17 @@ local function connect(addr, port)
 end
 
 
-local function connect_host(host, port)
+local function connect_host(network, host, port)
     local addr, err = resolve(host)
     if not addr then
         return false, err
     end
 
-    return connect(addr, port)
-end
-
-local function _flush_send(self)
-    local send_buf = self.v_send_buf
-    local v = send_buf:get_head_data()
-    local fd = self.v_fd
-    local count = 0
-
-    while v do
-        local len = #v
-        local n, err = fd:send(v)
-        if not n then
-            if err == EAGAIN or err == EINTR then
-                break
-            end
-            return false, conn_error(err)
-        else
-            count = count + n
-            send_buf:pop(n)
-            if n < len then
-                break
-            end
-        end
-        v = send_buf:get_head_data()
-    end
-    return count
-end
-
-
-local function _flush_recv(self)
-    local recv_buf = self.v_recv_buf
-    local fd = self.v_fd
-    local count = 0
-
-    while true do
-    ::CONTINUE::
-        local data, err = fd:recv()
-        if not data then
-            if err == EAGAIN or err == 0 then
-                return true
-            elseif err == EINTR then
-                goto CONTINUE
-            else
-                return false, conn_error(err)
-            end
-        elseif #data == 0 then
-            return false, "connect_break"
-        else
-            local len = #data
-            count = count + len
-            recv_buf:push(data)
-            break
-        end
-    end
-
-    return count
+    return connect(network, addr, port)
 end
 
 local function _check_connect(self)
-    local fd = self.v_fd
+    local fd = self.v_fd.v_fd
     if not fd then
         return false, 'fd is nil'
     end
@@ -136,10 +80,8 @@ local function _check_connect(self)
     end
 end
 
-
-
 function mt:send_msg(data, header_len, endian)
-    local send_buf = self.v_send_buf
+    local send_buf = self.v_fd.v_send_buf
     header_len = header_len or DEF_MSG_HEADER_LEN
     endian = endian or DEF_MSG_ENDIAN
 
@@ -149,7 +91,7 @@ end
 
 
 function mt:recv_msg(out_msg, header_len, endian)
-    local recv_buf = self.v_recv_buf
+    local recv_buf = self.v_fd.v_recv_buf
     header_len = header_len or DEF_MSG_HEADER_LEN
     endian = endian or DEF_MSG_ENDIAN
 
@@ -157,7 +99,7 @@ function mt:recv_msg(out_msg, header_len, endian)
 end
 
 function mt:pop_msg(header_len, endian)
-    local recv_buf = self.v_recv_buf
+    local recv_buf = self.v_fd.v_recv_buf
     header_len = header_len or DEF_MSG_HEADER_LEN
     endian = endian or DEF_MSG_ENDIAN
 
@@ -166,14 +108,11 @@ end
 
 
 function mt:send(data)
-   self.v_send_buf:push(data)
+    self.v_fd.v_send_buf:push(data)
 end
 
-
-
 function mt:recv(out)
-    local recv_buf = self.v_recv_buf
-    return recv_buf:pop_all(out)
+    return self.v_fd.v_recv_buf:pop_all(out)
 end
 
 
@@ -195,7 +134,7 @@ status: string类型 当前sconn所在的状态，状态只能是:
     "close": 关闭状态
 ]]
 
-function mt:update()
+function mt:update(msnow)
     local fd = self.v_fd
     if not fd then
         return false, "fd is nil", "close"
@@ -210,12 +149,12 @@ function mt:update()
         end
     end
 
-    success, err = _flush_send(self)
+    success, err = fd:flush_send()
     if not success then
         return false, err, "send"
     end
 
-    success, err = _flush_recv(self)
+    success, err = fd:flush_recv()
     if not success then
         if err == "connect_break" then
             return false, "connect break", "connect_break"
@@ -224,38 +163,43 @@ function mt:update()
         end
     end
 
+    fd:update(msnow)
     return true, nil, "forward"
 end
 
 
 function mt:flush_send()
-    local count = false
+    local count
     repeat
-        count = _flush_send(self)
+        count = self.v_fd:flush_send()
     until not count or count == 0
 end
 
 function mt:getsockname()
-    return self.v_fd:getsockname()
+    return self.v_fd.v_fd:getsockname()
 end
 
 
-function mt:new_connect(addr, port)
-    local fd = socket.socket(addr.family, socket.SOCK_STREAM, 0)
-    fd:setblocking(false)
+function mt:new_connect(network, addr, port)
+    local fd, errcode
+    if network == "tcp" then
+        fd, errcode = tcp.new(addr, port)
+    else
+        fd, errcode = kcp.new(addr, port)
+    end
 
-    local errcode = fd:connect(addr.addr, port)
     if errcode == OK or
        errcode == EAGAIN or
        errcode == EINPROGRESS or
-       errcode == EINTR or 
+       errcode == EINTR or
        errcode == EISCONN  then
-       self.v_fd:close()
-       self.v_recv_buf:clear()
-       self.v_send_buf:clear()
+       self.v_fd.v_fd:close()
+       self.v_fd.v_recv_buf:clear()
+       self.v_fd.v_send_buf:clear()
        self.v_fd = fd
        self.o_host_addr = addr
        self.o_port = port
+       self.o_network = network
        self.v_check_connect = true
        return true
     else
@@ -265,7 +209,7 @@ end
 
 function mt:close()
     self:flush_send()
-    self.v_fd:close()
+    self.v_fd.v_fd:close()
     self.v_fd = nil
     self.v_check_connect = true
 end

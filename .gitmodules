@@ -3,4 +3,5 @@
 	url = https://github.com/cloudwu/sproto.git
 [submodule "godep/src/github.com/ejoy/goscon"]
 	path = godep/src/github.com/ejoy/goscon
-	url = git@github.com:ejoy/goscon.git
+	url = git@github.com:wudeng/goscon.git
+	branch = kcp

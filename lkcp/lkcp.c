@@ -90,6 +90,7 @@ static int lkcp_create(lua_State* L){
     }
 
     kcp->output = kcp_output_callback;
+    // kcp->stream = 1;
 
     *(ikcpcb**)lua_newuserdata(L, sizeof(void*)) = kcp;
     luaL_getmetatable(L, "kcp_meta");
@@ -97,7 +98,7 @@ static int lkcp_create(lua_State* L){
     return 1;
 }
 
-static int lkcp_client_recv(lua_State* L){
+static int lkcp_recv(lua_State* L){
 	ikcpcb* kcp = check_kcp(L, 1);
 	if (kcp == NULL) {
         lua_pushnil(L);
@@ -120,7 +121,7 @@ static int lkcp_client_recv(lua_State* L){
     return 2;
 }
 
-static int lkcp_client_send(lua_State* L){
+static int lkcp_send(lua_State* L){
 	ikcpcb* kcp = check_kcp(L, 1);
 	if (kcp == NULL) {
         lua_pushnil(L);
@@ -159,7 +160,7 @@ static int lkcp_check(lua_State* L){
     return 1;
 }
 
-static int lkcp_client_input(lua_State* L){
+static int lkcp_input(lua_State* L){
 	ikcpcb* kcp = check_kcp(L, 1);
 	if (kcp == NULL) {
         lua_pushnil(L);
@@ -214,30 +215,30 @@ static int lkcp_nodelay(lua_State* L){
     return 1;
 }
 
-static const struct luaL_Reg lkcp_client_methods [] = {
-    { "lkcp_recv" , lkcp_client_recv },
-    { "lkcp_send" , lkcp_client_send },
+static const struct luaL_Reg lkcp_methods [] = {
+    { "lkcp_recv" , lkcp_recv },
+    { "lkcp_send" , lkcp_send },
     { "lkcp_update" , lkcp_update },
     { "lkcp_check" , lkcp_check },
-    { "lkcp_input" , lkcp_client_input },
+    { "lkcp_input" , lkcp_input },
     { "lkcp_flush" , lkcp_flush },
     { "lkcp_wndsize" , lkcp_wndsize },
     { "lkcp_nodelay" , lkcp_nodelay },
 	{NULL, NULL},
 };
 
-static const struct luaL_Reg l_client_methods[] = {
+static const struct luaL_Reg l_methods[] = {
     { "lkcp_create" , lkcp_create },
     {NULL, NULL},
 };
 
-int luaopen_lkcp_client(lua_State* L) {
+int luaopen_lkcp(lua_State* L) {
     luaL_checkversion(L);
 
     luaL_newmetatable(L, "kcp_meta");
 
     lua_newtable(L);
-    luaL_setfuncs(L, lkcp_client_methods, 0);
+    luaL_setfuncs(L, lkcp_methods, 0);
     lua_setfield(L, -2, "__index");
     lua_pushcfunction(L, kcp_gc);
     lua_setfield(L, -2, "__gc");
@@ -250,7 +251,7 @@ int luaopen_lkcp_client(lua_State* L) {
     lua_setmetatable(L, -2);
     lua_setfield(L, LUA_REGISTRYINDEX, "kcp_lua_recv_buffer");
 
-    luaL_newlib(L, l_client_methods);
+    luaL_newlib(L, l_methods);
 
     return 1;
 }

@@ -1,4 +1,3 @@
-
 CLUALIB=socket rc4 crypt sproto lkcp
 CLUALIB_TARGET=$(patsubst %, %.so, $(CLUALIB))
 
@@ -13,7 +12,10 @@ else
 	CC=gcc
 endif
 
+all: ./bin/goscon
 
+./bin/goscon:
+	go build -o $@ github.com/ejoy/goscon
 
 socket.so: lib/lsocket.c
 	$(CC) $(LIBFLAG) -o $@ $^
@@ -30,11 +32,7 @@ sproto.so:  sproto/lsproto.c sproto/sproto.c
 lkcp.so: lkcp/lkcp.c lkcp/ikcp.c
 	$(CC) $(LIBFLAG) -o $@ $^
 
-goscon:
-	cd goscon/ && go build
-
 clean:
 	-rm -rf *.so
-
 
 .PHONY: all clean goscon

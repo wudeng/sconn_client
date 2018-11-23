@@ -1,3 +1,5 @@
 *.so
 *.dSYM
 *.o
+bin/
+godep/
